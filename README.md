@@ -1,5 +1,9 @@
 # Documentation
 
+## Instructions
+
+Change .env.example to .env and insert values. Also insert values for traefik.toml. 
+
 ## Compose file
 
 ```

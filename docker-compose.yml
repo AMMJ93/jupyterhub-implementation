@@ -1,0 +1,83 @@
+version: '3'
+
+services:
+  jupyhub:
+    build: jupyterhub
+    container_name: hub
+    environment:
+      DOCKER_JUPYTER_IMAGE: jupyterlab_img
+      DOCKER_NETWORK_NAME: ${COMPOSE_PROJECT_NAME}_default
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      OAUTH_CALLBACK_URL: ${OAUTH_CALLBACK_URL}
+      HUB_IP: hub
+    labels:
+      - "traefik.enable=true"
+      - "treafik.frontend.rule=Host:${HOST}"
+    volumes:
+      - jupyterhub_data:/srv/jupyterhub
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  traefik:
+    build: traefik
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /opt/appdata/traefik/traefik.toml:/traefik.toml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/appdata/traefik/acme.json:/acme.json
+
+  jupyterlab:
+    build: jupyterlab
+    image: jupyterlab_img
+    environment:
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_USER}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_PASSWORD}
+      MLFLOW_TRACKING_URI: 'http://mlflow:5000'
+    command: echo
+
+  waitfordb:
+    image: dadarek/wait-for-dependencies
+    depends_on:
+      - postgres
+    command: postgres:5432
+
+  mlflow:
+    build: mlflow_build
+    container_name: mlflow
+    hostname: mlflow
+    expose:
+      - "5000"
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - waitfordb
+    environment:
+      DB_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
+      MLFLOW_TRACKING_USERNAME: ${MLFLOW_USER}
+      MLFLOW_TRACKING_PASSWORD: ${MLFLOW_PASSWORD}
+    labels:
+      - "traefik.enable=false"
+      - "traefik.frontend.rule=Host:${HOST}"
+      - "traefik.port=5000"
+
+  postgres:
+    build: postgres_build
+    container_name: postgresql
+    restart: always
+    hostname: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: mlflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  jupyterhub_data:
+  postgres_data:
